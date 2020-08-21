@@ -5,9 +5,11 @@
         class="column"
         v-for="(column, $columnIndex) of board.columns"
         :key="$columnIndex"
-        @drop="moveTask($event, column.tasks)"
+        draggable
+        @drop="moveTaskOrColumn($event, column.tasks, $columnIndex)"
         @dragover.prevent
         @dragenter.prevent
+        @dragstart.self="pickupColumn($event, $columnIndex)"
       >
         <div class="flex items-center mb-2 font-bold">
           {{ column.name }}
@@ -20,6 +22,9 @@
             draggable
             @dragstart="pickupTask($event, $taskIndex, $columnIndex)"
             @click="goToTask(task)"
+            @dragover.prevent
+            @dragenter.prevent
+            @drop.stop="moveTaskOrColumn($event, column.tasks, $columnIndex, $taskIndex)"
           >
             <span class="w-full flex-noshrink font-bold">
               {{ task.name }}
@@ -39,6 +44,14 @@
           >
         </div>
       </div>
+      <div class="column flex">
+        <input
+          class="p-2 mr-2 flex-grow"
+          placeholder="New column name"
+          v-model="newColumnName"
+          @keyup.enter="createColumn"
+        />
+      </div>
     </div>
     <div
       class="task-bg"
@@ -54,6 +67,11 @@
 import { mapState } from 'vuex'
 
 export default {
+  data () {
+    return {
+      newColumnName: ''
+    }
+  },
   computed: {
     ...mapState(['board']),
     isTaskOpen () {
@@ -74,8 +92,10 @@ export default {
     pickupTask (event, taskIndex, fromColumnIndex) {
       event.dataTransfer.effectAllowed = 'move'
       event.dataTransfer.dropEffect = 'move'
-      event.dataTransfer.setData('task-index', taskIndex)
+
+      event.dataTransfer.setData('from-task-index', taskIndex)
       event.dataTransfer.setData('from-column-index', fromColumnIndex)
+      event.dataTransfer.setData('type', 'task')
     },
     moveTask (event, toTasks) {
       const fromColumnIndex = event.dataTransfer.getData('from-column-index')
@@ -87,6 +107,36 @@ export default {
         toTasks,
         taskIndex
       })
+    },
+    pickupColumn (event, fromColumnIndex) {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dropEffect = 'move'
+
+      event.dataTransfer.setData('from-column-index', fromColumnIndex)
+      event.dataTransfer.setData('type', 'column')
+    },
+    moveTaskOrColumn (event, toTasks, toColumnIndex, toTaskIndex) {
+      const type = event.dataTransfer.getData('type')
+      if (type === 'task') {
+        this.moveTask(event, toTasks, toTaskIndex !== undefined ? toTaskIndex : toTasks.length)
+      } else {
+        this.moveColumn(event, toColumnIndex)
+      }
+    },
+    moveColumn (event, toColumnIndex) {
+      const fromColumnIndex = event.dataTransfer.getData('from-column-index')
+      this.$store.commit('MOVE_COLUMN', {
+        fromColumnIndex,
+        toColumnIndex
+      })
+    },
+    createColumn () {
+      if (this.newColumnName) {
+        this.$store.commit('CREATE_COLUMN', {
+          name: this.newColumnName
+        })
+        this.newColumnName = ''
+      }
     }
   }
 }
